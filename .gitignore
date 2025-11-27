@@ -1,0 +1,17 @@
+# Node modules
+node_modules/
+
+# Environment files
+.env
+.env.local
+
+# Production-specific configuration (keep outside repo)
+production-config.sh
+
+# Test files
+*.tmp
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
