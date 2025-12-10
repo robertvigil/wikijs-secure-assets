@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client-Side Encryption Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+      line-height: 1.6;
+    }
+    h1, h2, h3 { color: #333; }
+    h1 { border-bottom: 2px solid #2196f3; padding-bottom: 10px; }
+    h2 { margin-top: 40px; color: #1976d2; }
+
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    label { display: block; font-weight: 600; margin-bottom: 5px; color: #555; }
+    textarea, input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    textarea { min-height: 100px; resize: vertical; }
+    textarea:focus, input:focus { outline: none; border-color: #2196f3; }
+
+    button {
+      background: #2196f3;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+    button:hover { background: #1976d2; }
+    button.secondary { background: #757575; }
+    button.secondary:hover { background: #616161; }
+
+    .output {
+      background: #f8f9fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      padding: 15px;
+      margin-top: 15px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+      word-break: break-all;
+      white-space: pre-wrap;
+    }
+    .output.success { background: #e8f5e9; border-color: #4caf50; }
+    .output.error { background: #ffebee; border-color: #f44336; color: #c62828; }
+
+    .encrypted-secret {
+      background: #fff3e0;
+      border: 1px solid #ff9800;
+      border-radius: 4px;
+      padding: 15px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .encrypted-secret:hover { background: #ffe0b2; }
+    .encrypted-secret::before { content: '🔒 '; }
+
+    .example-code {
+      background: #263238;
+      color: #aed581;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+    }
+
+    .note {
+      background: #e3f2fd;
+      border-left: 4px solid #2196f3;
+      padding: 10px 15px;
+      margin: 15px 0;
+      font-size: 14px;
+    }
+
+    .row { display: flex; gap: 15px; }
+    .row > * { flex: 1; }
+
+    hr { border: none; border-top: 1px solid #e0e0e0; margin: 30px 0; }
+  </style>
+</head>
+<body>
+
+  <h1>Client-Side Encryption Demo</h1>
+  <p>Encrypt sensitive content and embed it in any web page. All encryption/decryption happens in your browser - no data is sent to any server.</p>
+
+  <!-- ============================================ -->
+  <h2>1. Try Decryption First</h2>
+  <!-- ============================================ -->
+
+  <div class="card">
+    <p>Click the encrypted block below to decrypt it. The passphrase is: <code>password123</code></p>
+
+    <div class="encrypted-secret" data-encrypted="2dHSFQSX8ndyuvTqa3jDz7bPVSrXYUefz6J5rXJTRLJkbp/6NKcpF9YmrXJuzP1AfH1NzaxOZK7X1L5ILpV33WF8li/ldFQC9U0hQITyLdZ4rzb5HXId9s9RikMH58Lxcp/DMw==">
+      Click to decrypt this secret message (passphrase: password123)
+    </div>
+
+    <div class="note">
+      <strong>How it works:</strong> The encrypted blob is stored in the <code>data-encrypted</code> attribute. When clicked, the script prompts for a passphrase, decrypts the content, and displays it inline.
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <h2>2. Encrypt Your Own Content</h2>
+  <!-- ============================================ -->
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label for="plaintext">Text to encrypt:</label>
+        <textarea id="plaintext" placeholder="Enter sensitive content here..."></textarea>
+      </div>
+      <div>
+        <label for="passphrase">Passphrase:</label>
+        <input type="password" id="passphrase" placeholder="Enter a strong passphrase">
+        <button onclick="doEncrypt()" style="margin-top: 15px; width: 100%;">Encrypt</button>
+      </div>
+    </div>
+
+    <div id="encrypt-output" class="output" style="display: none;"></div>
+  </div>
+
+  <!-- ============================================ -->
+  <h2>3. Test Decryption</h2>
+  <!-- ============================================ -->
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label for="blob">Encrypted blob:</label>
+        <textarea id="blob" placeholder="Paste encrypted blob here..."></textarea>
+      </div>
+      <div>
+        <label for="decrypt-pass">Passphrase:</label>
+        <input type="password" id="decrypt-pass" placeholder="Enter passphrase">
+        <button onclick="doDecrypt()" style="margin-top: 15px; width: 100%;">Decrypt</button>
+      </div>
+    </div>
+
+    <div id="decrypt-output" class="output" style="display: none;"></div>
+  </div>
+
+  <!-- ============================================ -->
+  <h2>4. Usage in Your Pages</h2>
+  <!-- ============================================ -->
+
+  <div class="card">
+    <h3>Step 1: Include the script</h3>
+    <p>Add to your HTML page:</p>
+    <div class="example-code">&lt;script src="client-encrypt.js"&gt;&lt;/script&gt;</div>
+
+    <h3 style="margin-top: 25px;">Step 2: Add encrypted blocks</h3>
+    <p>Paste the HTML snippet from the encryption tool:</p>
+    <div class="example-code">&lt;div class="encrypted-secret" data-encrypted="YOUR_BLOB_HERE"&gt;
+  Click to reveal password
+&lt;/div&gt;</div>
+
+    <h3 style="margin-top: 25px;">Step 3: Share the passphrase separately</h3>
+    <p>Tell the recipient the passphrase through a different channel (in person, phone, Signal, etc.).</p>
+  </div>
+
+  <!-- ============================================ -->
+  <h2>5. Security Info</h2>
+  <!-- ============================================ -->
+
+  <div class="card">
+    <ul>
+      <li><strong>Algorithm:</strong> AES-256-GCM (authenticated encryption)</li>
+      <li><strong>Key derivation:</strong> PBKDF2-SHA256 with 310,000 iterations</li>
+      <li><strong>Salt:</strong> 128-bit random per encryption</li>
+      <li><strong>IV:</strong> 96-bit random per encryption</li>
+      <li><strong>Server never sees:</strong> Your plaintext or passphrase</li>
+    </ul>
+
+    <div class="note">
+      <strong>Appropriate for:</strong> Non-critical passwords shared with trusted people (streaming services, WiFi, etc.)<br>
+      <strong>Not appropriate for:</strong> Banking credentials, crypto keys, anything where compromise = major harm
+    </div>
+  </div>
+
+  <hr>
+  <p style="text-align: center; color: #888; font-size: 14px;">
+    AES-256-GCM + PBKDF2 | <a href="https://github.com/robertvigil/wikijs-secure-assets/tree/main/client-encryption">Source</a>
+  </p>
+
+  <!-- Load the encryption library -->
+  <script src="client-encrypt.js"></script>
+
+  <script>
+    // Encryption UI
+    async function doEncrypt() {
+      const plaintext = document.getElementById('plaintext').value;
+      const passphrase = document.getElementById('passphrase').value;
+      const output = document.getElementById('encrypt-output');
+
+      if (!plaintext || !passphrase) {
+        output.textContent = 'Please enter both text and passphrase';
+        output.className = 'output error';
+        output.style.display = 'block';
+        return;
+      }
+
+      try {
+        const blob = await SecureContent.encrypt(plaintext, passphrase);
+        output.innerHTML = `<strong>Encrypted blob (copy this):</strong>\n\n${blob}\n\n<strong>HTML for Wiki.js:</strong>\n\n&lt;div class="encrypted-secret" data-encrypted="${blob}"&gt;\n  Click to decrypt\n&lt;/div&gt;`;
+        output.className = 'output success';
+      } catch (e) {
+        output.textContent = 'Encryption failed: ' + e.message;
+        output.className = 'output error';
+      }
+      output.style.display = 'block';
+    }
+
+    // Decryption UI
+    async function doDecrypt() {
+      const blob = document.getElementById('blob').value.trim();
+      const passphrase = document.getElementById('decrypt-pass').value;
+      const output = document.getElementById('decrypt-output');
+
+      if (!blob || !passphrase) {
+        output.textContent = 'Please enter both blob and passphrase';
+        output.className = 'output error';
+        output.style.display = 'block';
+        return;
+      }
+
+      try {
+        const plaintext = await SecureContent.decrypt(blob, passphrase);
+        output.innerHTML = `<strong>Decrypted content:</strong>\n\n${plaintext}`;
+        output.className = 'output success';
+      } catch (e) {
+        output.textContent = 'Decryption failed: ' + e.message;
+        output.className = 'output error';
+      }
+      output.style.display = 'block';
+    }
+  </script>
+
+</body>
+</html>

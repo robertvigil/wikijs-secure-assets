@@ -160,11 +160,13 @@ async function authenticateRequest(req, res) {
   }
 }
 
-// Route for files: /auth/:groupName/:assetPath
-app.get('/auth/:groupName/:assetPath', authenticateRequest);
-
-// Route for directories: /auth/:groupName or /auth/:groupName/
-app.get('/auth/:groupName', authenticateRequest);
+// Route for all auth requests using regex to support nested paths
+// Matches: /auth/groupName, /auth/groupName/, /auth/groupName/file, /auth/groupName/path/to/file
+app.get(/^\/auth\/([^\/]+)\/?(.*)$/, (req, res) => {
+  req.params.groupName = req.params[0];
+  req.params.assetPath = req.params[1] || '';
+  return authenticateRequest(req, res);
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
