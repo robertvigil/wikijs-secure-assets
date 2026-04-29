@@ -544,6 +544,42 @@ sudo systemctl enable asset-auth
    chmod 751 /home/user
    ```
 
+### Intermittent 403s after a period of inactivity
+
+**Symptom:** secure asset works for a while, then fails with 403. Loading or refreshing any other Wiki.js tab (e.g., the main robertvigil.com page) and then refreshing the failed asset tab makes it work again.
+
+**Cause:** Wiki.js issues short-lived JWTs (default `tokenExpiration: 30m`) and refreshes them silently as you use the SPA. The asset-auth service has no refresh logic — it just verifies the cookie's signature and TTL, so an expired JWT returns 403 ("JWT expired" in the auth service logs). When you reload a Wiki.js tab, the SPA's session logic mints a fresh JWT and writes it to the `jwt` cookie. Cookies are domain-scoped, so the new cookie is immediately available to *all* tabs on robertvigil.com, including the asset tab.
+
+**Quick workaround:** reload any Wiki.js page on the same domain, then reload the asset.
+
+**Permanent fix — bump the JWT TTL.** Wiki.js stores `tokenExpiration` as JSON in the `settings` table (key `auth`). To extend to e.g. 2 hours:
+
+```bash
+ssh rvigil@robertvigil.com
+
+# Inspect the current value first
+sudo -u postgres psql wikijs -c "SELECT jsonb_pretty(value::jsonb) FROM settings WHERE key = 'auth';"
+
+# Update to 2h (the value column is type json, not text or jsonb — note the ::json cast)
+sudo -u postgres psql wikijs -c "UPDATE settings SET value = jsonb_set(value::jsonb, '{tokenExpiration}', '\"2h\"')::json WHERE key = 'auth';"
+
+# Restart Wiki.js so new logins pick up the change
+sudo systemctl restart wiki
+
+# Verify
+sudo -u postgres psql wikijs -c "SELECT value::jsonb->>'tokenExpiration' FROM settings WHERE key = 'auth';"
+# → 2h
+```
+
+Accepted formats follow [zeit/ms](https://github.com/vercel/ms): `2h`, `4h`, `8h`, `1d`, etc. The companion field `tokenRenewal` (default `14d`) is the refresh-token window — leave it alone unless you know why you're touching it.
+
+**Two caveats:**
+
+- **Existing tokens keep their old TTL** — they were minted with the old expiry baked in. Log out and log back in after the restart to get a fresh JWT with the new TTL.
+- **Decode the cookie at [jwt.io](https://jwt.io)** to confirm: `exp - iat` should equal the new TTL in seconds (7200 for 2h).
+
+The auth service code itself doesn't need changes — it reads whatever expiry Wiki.js encodes in the JWT.
+
 ### Image not found (404)
 
 1. **Check file exists**
@@ -651,6 +687,40 @@ cp /home/user/wiki/data/cache/[HASH].dat /home/user/secure-assets/managers/repor
 # 3. Update Wiki.js pages to use new URL
 # 4. Delete old asset from Wiki.js
 ```
+
+### External Identity Providers (Auth0, Okta, etc.)
+
+This secure assets system **remains fully compatible** when Wiki.js is configured to use external identity providers like Auth0, Okta, Keycloak, or any OIDC/SAML provider.
+
+**Why it still works:**
+
+```
+Authentication Flow with External IdP:
+
+User → Auth0/Okta login → Redirects back to Wiki.js → Wiki.js creates session
+                                                    → Wiki.js issues its own JWT
+                                                    → Stored in 'jwt' cookie
+                                                    → asset-auth-service validates Wiki.js JWT ✓
+```
+
+The external identity provider handles **authentication** (verifying who the user is), but Wiki.js still:
+
+1. **Creates/links local user records** in its database
+2. **Manages group membership** (groups are still Wiki.js groups)
+3. **Issues its own JWT tokens** signed with its RSA keys
+4. **Stores the JWT** in the `jwt` cookie
+
+| Component | With Local Auth | With External IdP (Auth0, etc.) |
+|-----------|-----------------|----------------------------------|
+| JWT cookie | Wiki.js issues | Wiki.js still issues |
+| JWT signing key | Wiki.js RSA key | Same Wiki.js RSA key |
+| User ID in JWT | Wiki.js user ID | Same Wiki.js user ID |
+| Group membership | Wiki.js database | Same Wiki.js database |
+| asset-auth-service | Validates Wiki.js JWT | Still validates Wiki.js JWT |
+
+**Key point:** The asset-auth-service validates **Wiki.js tokens**, not Auth0/Okta tokens. The external provider is just the "front door" for authentication - Wiki.js still manages sessions and authorization.
+
+**No changes required** to this secure assets system when adding an external identity provider to Wiki.js.
 
 ### Uninstall
 
